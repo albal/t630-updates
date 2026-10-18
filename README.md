@@ -11,13 +11,9 @@ correctly reports no updates when the server is already on the final versions.
 
 ## Quick start
 
-The image is private on GHCR, so log in first with a GitHub token that has
-`read:packages`:
-
 ```bash
-echo "$TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
 docker run -d --name dell-repo --restart unless-stopped -p 80:80 \
-  ghcr.io/albal/dell-13g-firmware-repo:t630
+  ghcr.io/albal/t630-updates:t630
 ```
 
 Check it's working by opening `http://<docker-host>/versions.txt`, which lists
@@ -117,5 +113,5 @@ The code in this repository is released under the [MIT License](LICENSE),
 © 2026 Al West.
 
 The firmware packages that go into the image are Dell's, under Dell's own
-licence terms, and aren't covered by the MIT License. Keep the image private
-unless you've checked that you're allowed to redistribute them.
+licence terms, and aren't covered by the MIT License. They are unmodified
+copies of files Dell publishes on downloads.dell.com.
