@@ -2,3 +2,5 @@ repo/
 .git/
 .github/
 *.md
+*.sh
+!entrypoint.sh

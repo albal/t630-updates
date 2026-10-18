@@ -14,17 +14,44 @@ correctly reports no updates when the server is already on the final versions.
 
 ## Quick start
 
+Clone the repository, then use either script:
+
+```bash
+git clone https://github.com/albal/t630-updates.git && cd t630-updates
+
+./wizard.sh   # asks which models you have, checks them against Dell's catalog, then starts it
+./run.sh      # starts it straight away for a T630 on port 80
+```
+
+`run.sh` takes its settings from environment variables, for example
+`MODELS=T630,R730 PORT=8080 ./run.sh`:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `MODELS` | `T630` | Comma-separated PowerEdge models. |
+| `PORT` | `80` | Host port. iDRAC8's HTTP update may only work on port 80. |
+| `NAME` | `dell-repo` | Container name. An existing container with this name is replaced. |
+| `VOLUME` | `dell-firmware` | Docker volume holding the firmware. Kept when the container is replaced. |
+| `IMAGE` | `ghcr.io/albal/t630-updates:latest` | Image to run. |
+| `PULL` | `yes` | `no` skips pulling the latest image. |
+| `FOLLOW` | `yes` | `no` returns straight away instead of waiting for the download. |
+
+Both scripts wait for the download to finish, then print the address to enter
+in iDRAC. On first start the container downloads about 4.6 GB per model, which
+takes a minute or two on a fast connection. The volume keeps the files, so
+later starts skip the download.
+
+### Without the scripts
+
 ```bash
 docker run -d --name dell-repo --restart unless-stopped \
   -p 80:80 -v dell-firmware:/repo -e MODELS=T630 \
   ghcr.io/albal/t630-updates:latest
 ```
 
-On first start the container downloads about 4.6 GB per model, which takes a
-minute or two on a fast connection. Follow it with `docker logs -f dell-repo`.
-It's ready when the log says `Serving /repo on port 80` and `docker ps` shows
-the container as `healthy`. The `dell-firmware` volume keeps the files, so
-later restarts skip the download.
+Follow the download with `docker logs -f dell-repo`. It's ready when the log
+says `Serving /repo on port 80` and `docker ps` shows the container as
+`healthy`.
 
 Check it's working by opening `http://<docker-host>/versions.txt`, which lists
 every package and version in the repository.
@@ -32,7 +59,7 @@ every package and version in the repository.
 > Put `-p`, `-v` and `-e` **before** the image name. Anything after the image
 > name is passed to the container, not to Docker.
 
-### Settings
+### Container settings
 
 | Variable | Default | Effect |
 |----------|---------|--------|

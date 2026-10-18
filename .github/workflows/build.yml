@@ -7,7 +7,7 @@ name: Build image
 on:
   push:
     branches: [main]
-    paths-ignore: ["**.md", "LICENSE"]
+    paths-ignore: ["**.md", "LICENSE", "run.sh", "wizard.sh"]
   workflow_dispatch:
 
 permissions:
