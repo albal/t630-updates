@@ -15,6 +15,7 @@ Standard library only.
 """
 import argparse
 import concurrent.futures
+import datetime
 import gzip
 import hashlib
 import os
@@ -86,6 +87,18 @@ def supports(elem, ids):
     return any(m.get("systemID") in ids for m in elem.iter("Model"))
 
 
+def recency(comp):
+    """Sort key for "newer". Uses releaseDate, not dateTime: dateTime changes
+    whenever Dell repackages an entry, so an older firmware can have a later
+    dateTime (e.g. PERC H730 25.5.8 vs 25.5.9)."""
+    try:
+        released = datetime.datetime.strptime((comp.get("releaseDate") or "").strip(), "%B %d, %Y").date()
+    except ValueError:
+        released = datetime.date.min
+    version = tuple(int(p) if p.isdigit() else 0 for p in re.split(r"[.\-]", comp.get("vendorVersion") or ""))
+    return released, version, comp.get("dateTime") or ""
+
+
 def select_components(root, ids, include_drivers, all_versions):
     candidates = []
     for c in root.findall("SoftwareComponent"):
@@ -104,6 +117,10 @@ def select_components(root, ids, include_drivers, all_versions):
     # Keep, for every device, the newest package that supports it. Grouping by
     # whole package doesn't work because each version supports slightly
     # different devices.
+    def device_key(d):
+        pci = d.find("PCIInfo")
+        return d.get("componentID") or "", tuple(sorted(pci.attrib.items())) if pci is not None else ()
+
     newest = {}
     no_device = []
     for c in candidates:
@@ -112,11 +129,21 @@ def select_components(root, ids, include_drivers, all_versions):
             no_device.append(c)
             continue
         for d in devices:
-            pci = d.find("PCIInfo")
-            key = (d.get("componentID") or "", tuple(sorted(pci.attrib.items())) if pci is not None else ())
-            if key not in newest or (c.get("dateTime") or "") > (newest[key].get("dateTime") or ""):
+            key = device_key(d)
+            if key not in newest or recency(c) > recency(newest[key]):
                 newest[key] = c
+
+    # A package kept for one device may also list devices that have a newer
+    # package. Remove those from its entry, or iDRAC can offer it as a
+    # downgrade for them.
     keep = {id(c) for c in newest.values()} | {id(c) for c in no_device}
+    for c in candidates:
+        if id(c) not in keep:
+            continue
+        for parent in c.iter("SupportedDevices"):
+            for d in list(parent):
+                if d.tag == "Device" and newest.get(device_key(d)) is not c:
+                    parent.remove(d)
     return [c for c in candidates if id(c) in keep]
 
 
