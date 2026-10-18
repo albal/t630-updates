@@ -1,0 +1,66 @@
+# Builds the firmware repository image and pushes it to GHCR.
+#
+#   docker run -d -p 80:80 ghcr.io/<owner>/<repo>:t630
+name: Build image
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+    inputs:
+      models:
+        description: Comma-separated PowerEdge models (e.g. T630,R730)
+        default: T630
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  MODELS: ${{ inputs.models || 'T630' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      # The firmware (about 5 GB per model) is stored in both build stages, so
+      # make room on the runner.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Image name and tags
+        id: meta
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tag="$(echo "$MODELS" | tr '[:upper:]' '[:lower:]' | tr -d ' ' | tr ',' '-')"
+          {
+            echo "tags<<EOF"
+            echo "$image:$tag"
+            echo "$image:$tag-${GITHUB_SHA::7}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: MODELS=${{ env.MODELS }}
+          tags: ${{ steps.meta.outputs.tags }}
+          push: true
+
+      - name: Disk usage after build
+        if: always()
+        run: df -h /
